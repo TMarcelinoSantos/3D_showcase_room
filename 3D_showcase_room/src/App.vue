@@ -16,6 +16,8 @@ const autoRotate = ref(true)
 const wireframe = ref(false)
 const isFullscreen = ref(false)
 const stats = ref({ meshes: 0, vertices: 0, materials: 0 })
+const modelFileSize = ref('Loading...')
+const hoverCard = ref({ visible: false, x: 0, y: 0, partName: '' })
 
 let scene
 let camera
@@ -25,7 +27,48 @@ let frameId
 let activeModel
 let resizeObserver
 let objectUrl
+const raycaster = new THREE.Raycaster()
+const pointer = new THREE.Vector2()
 const materials = new Set()
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return 'Unknown size'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+const updateHoverCard = (event) => {
+  if (!activeModel || !camera || !canvasHost.value || isLoading.value) {
+    hoverCard.value.visible = false
+    return
+  }
+
+  const bounds = canvasHost.value.getBoundingClientRect()
+  pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1
+  pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1
+  raycaster.setFromCamera(pointer, camera)
+  const hit = raycaster.intersectObject(activeModel, true)[0]
+
+  if (!hit) {
+    hoverCard.value.visible = false
+    return
+  }
+
+  const cardWidth = 190
+  const cardHeight = 112
+  const offset = 18
+  hoverCard.value = {
+    visible: true,
+    x: Math.min(event.clientX - bounds.left + offset, bounds.width - cardWidth - 12),
+    y: Math.min(event.clientY - bounds.top + offset, bounds.height - cardHeight - 12),
+    partName: hit.object.name || 'Main object',
+  }
+}
+
+const hideHoverCard = () => {
+  hoverCard.value.visible = false
+}
 
 const setWireframe = (enabled) => {
   if (!activeModel) return
@@ -114,6 +157,7 @@ const handleFile = (event) => {
   if (!file.name.toLowerCase().endsWith('.glb')) { loadError.value = 'Please choose a .glb file.'; return }
   if (objectUrl) URL.revokeObjectURL(objectUrl)
   objectUrl = URL.createObjectURL(file)
+  modelFileSize.value = formatFileSize(file.size)
   loadModel(objectUrl, file.name)
   event.target.value = ''
 }
@@ -177,6 +221,10 @@ onMounted(async () => {
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvasHost.value)
   document.addEventListener('fullscreenchange', syncFullscreen)
+  fetch('/Dumbo.glb', { method: 'HEAD' }).then((response) => {
+    const size = response.headers.get('content-length')
+    if (size) modelFileSize.value = formatFileSize(Number(size))
+  }).catch(() => { modelFileSize.value = 'Unknown size' })
   loadModel('/Dumbo.glb', 'Dumbo.glb')
   animate()
 })
@@ -210,7 +258,7 @@ onBeforeUnmount(() => {
       </aside>
       <section class="stage-panel">
         <div class="stage-head"><span>01 / Presentation view</span><span class="stage-coordinate">X <b>0.00</b> &nbsp; Y <b>0.00</b> &nbsp; Z <b>0.00</b></span></div>
-        <div ref="canvasHost" class="canvas-host"><div class="stage-grid"></div><div v-if="isLoading" class="loading-state"><span class="loader-ring"></span><span>Preparing your object {{ loadProgress }}%</span></div><div v-if="loadError" class="error-state"><strong>{{ loadError }}</strong><button type="button" @click="chooseFile">Choose another file</button></div><div class="canvas-badge">DRAG TO EXPLORE <span>↗</span></div><div class="axis-widget"><span class="axis-y">Y</span><span class="axis-x">X</span><span class="axis-z">Z</span><i></i></div></div>
+        <div ref="canvasHost" class="canvas-host" @pointermove="updateHoverCard" @pointerleave="hideHoverCard"><div class="stage-grid"></div><div v-if="isLoading" class="loading-state"><span class="loader-ring"></span><span>Preparing your object {{ loadProgress }}%</span></div><div v-if="loadError" class="error-state"><strong>{{ loadError }}</strong><button type="button" @click="chooseFile">Choose another file</button></div><div v-if="hoverCard.visible" class="hover-card" :style="{ left: `${hoverCard.x}px`, top: `${hoverCard.y}px` }"><div class="hover-card-kicker">Selected object</div><strong>{{ modelName }}</strong><div class="hover-card-part">{{ hoverCard.partName }}</div><dl><div><dt>File size</dt><dd>{{ modelFileSize }}</dd></div><div><dt>Meshes</dt><dd>{{ stats.meshes }}</dd></div></dl></div><div class="canvas-badge">DRAG TO EXPLORE <span>↗</span></div><div class="axis-widget"><span class="axis-y">Y</span><span class="axis-x">X</span><span class="axis-z">Z</span><i></i></div></div>
         <div class="stage-toolbar"><div class="toolbar-group"><button class="tool-button" :class="{ active: autoRotate }" type="button" title="Toggle automatic rotation" @click="autoRotate = !autoRotate"><span class="rotate-icon">↻</span><span>Auto rotate</span></button><button class="tool-button" :class="{ active: wireframe }" type="button" title="Toggle wireframe" @click="wireframe = !wireframe; setWireframe(wireframe)"><span class="wire-icon">◇</span><span>Wireframe</span></button></div><div class="toolbar-group"><button class="icon-button" type="button" title="Reset camera" @click="resetView">⟲</button><button class="icon-button" type="button" :title="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'" @click="toggleFullscreen">{{ isFullscreen ? '×' : '⛶' }}</button></div></div>
       </section>
     </section>
@@ -224,5 +272,6 @@ onBeforeUnmount(() => {
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; background: #f5f5f1; }.topbar { height: 78px; display: flex; align-items: center; gap: 28px; padding: 0 4.2vw; border-bottom: 1px solid #daddd8; }.brand { display: flex; align-items: center; gap: 11px; color: #202a27; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-decoration: none; }.brand-muted { color: #9da6a1; padding: 0 2px; }.brand-mark { display: flex; align-items: end; gap: 3px; height: 18px; }.brand-mark span { display: block; width: 4px; background: #d2df52; }.brand-mark span:nth-child(1) { height: 9px; }.brand-mark span:nth-child(2) { height: 14px; }.brand-mark span:nth-child(3) { height: 18px; }.topbar-meta { margin-left: auto; color: #89918c; font: 10px 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }.live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #a7c536; box-shadow: 0 0 0 4px #e7eed1; }.topbar-divider { display: inline-block; width: 1px; height: 13px; margin: 0 14px -3px; background: #d2d6d1; }.upload-button { border: 0; padding: 12px 17px; color: #f8faf2; background: #273331; cursor: pointer; font-size: 11px; font-weight: 700; }.plus-icon { margin-right: 8px; color: #d2df52; font-size: 17px; vertical-align: -1px; }
 .workspace { flex: 1; display: grid; grid-template-columns: minmax(260px, 28%) 1fr; min-height: 680px; padding: 4.5vw 4.2vw 3vw; gap: 5vw; }.sidebar { display: flex; flex-direction: column; max-width: 330px; padding: 17px 0 0; }.eyebrow, .section-label, .stage-head, .page-footer { color: #8e9892; font: 10px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }.eyebrow { color: #a7b834; }.sidebar h1 { margin: 21px 0 17px; color: #26322e; font-size: clamp(40px, 4.7vw, 68px); line-height: .98; letter-spacing: -.065em; }.sidebar h1 em { color: #a2af31; font-style: normal; }.intro { max-width: 260px; margin: 0 0 47px; color: #7b8580; font-size: 13px; line-height: 1.8; }.asset-card { display: flex; align-items: center; gap: 12px; padding: 10px; background: #fff; border: 1px solid #e3e5df; box-shadow: 0 7px 24px #313b2412; }.asset-preview { position: relative; display: grid; place-items: center; width: 48px; height: 48px; color: #fff; background: #303d38; font: 9px 'DM Mono', monospace; }.asset-file { padding: 4px 3px; border: 1px solid #89968d; }.asset-corner { position: absolute; top: 4px; right: 5px; color: #cad857; }.asset-info { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }.asset-info strong { overflow: hidden; color: #36413d; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.asset-info span { color: #9ca49f; font: 10px 'DM Mono', monospace; }.status-check { display: grid; place-items: center; width: 20px; height: 20px; color: #99ad2d; border: 1px solid #d8e1a1; border-radius: 50%; font: 11px 'DM Mono', monospace; }.status-check.loading { width: auto; height: auto; padding: 3px; border: 0; color: #9da69f; font-size: 9px; }.section-label { margin: 48px 0 15px; color: #afb6b0; }.details-list { margin: 0; border-top: 1px solid #dfe2dc; }.details-list div { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #dfe2dc; }.details-list dt { color: #8b948e; font-size: 11px; }.details-list dd { margin: 0; color: #4e5c55; font: 10px 'DM Mono', monospace; }.sidebar-footer { display: flex; align-items: center; gap: 12px; margin-top: auto; color: #9da49e; font: 10px 'DM Mono', monospace; line-height: 1.7; }.footer-spark { color: #c3d34e; font-size: 24px; }
 .stage-panel { min-width: 0; display: flex; flex-direction: column; }.stage-head { display: flex; justify-content: space-between; padding: 8px 0 14px; border-bottom: 1px solid #dfe2dc; }.stage-coordinate { color: #aab1ac; }.stage-coordinate b { color: #69756e; font-weight: 400; }.canvas-host { position: relative; flex: 1; min-height: 510px; overflow: hidden; background: #e7e9e4; }.canvas-host canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }.stage-grid { position: absolute; inset: 0; z-index: 0; opacity: .32; background-image: linear-gradient(#c6ccc6 1px, transparent 1px), linear-gradient(90deg, #c6ccc6 1px, transparent 1px); background-size: 60px 60px; mask-image: linear-gradient(to bottom, transparent, #000 40%, transparent); }.canvas-badge { position: absolute; z-index: 2; right: 24px; bottom: 23px; padding: 8px 10px; color: #a2aaa4; border: 1px solid #cbd1cc; background: #e7e9e4cc; font: 9px 'DM Mono', monospace; letter-spacing: .08em; }.canvas-badge span { margin-left: 11px; color: #9caf30; }.axis-widget { position: absolute; z-index: 2; right: 23px; top: 23px; width: 43px; height: 43px; border: 1px solid #c9d0ca; border-radius: 50%; color: #919b95; font: 8px 'DM Mono', monospace; }.axis-widget i { position: absolute; left: 21px; top: 8px; width: 1px; height: 26px; background: #b6c0b9; }.axis-widget span { position: absolute; }.axis-y { top: 3px; left: 19px; color: #b1c33e; }.axis-x { bottom: 8px; left: 31px; }.axis-z { bottom: 8px; left: 8px; }.loading-state, .error-state { position: absolute; z-index: 4; inset: 0; display: grid; place-content: center; justify-items: center; gap: 13px; color: #738078; font: 10px 'DM Mono', monospace; }.loader-ring { width: 30px; height: 30px; border: 2px solid #cad2cc; border-top-color: #aabd35; border-radius: 50%; animation: spin 1s linear infinite; }.error-state { color: #65716b; text-align: center; font-family: 'Manrope', sans-serif; }.error-state button { padding: 9px 12px; border: 1px solid #b5c16a; color: #697722; background: transparent; cursor: pointer; font-size: 11px; }.stage-toolbar { display: flex; justify-content: space-between; padding-top: 13px; }.toolbar-group { display: flex; gap: 5px; }.tool-button, .icon-button { display: flex; align-items: center; gap: 8px; border: 1px solid transparent; color: #8e9992; background: transparent; cursor: pointer; font-size: 10px; }.tool-button { padding: 7px 9px; }.tool-button.active { color: #52631d; border-color: #d6dfa7; background: #f1f5df; }.rotate-icon, .wire-icon { color: #a7b837; font-size: 18px; }.wire-icon { font-size: 16px; }.icon-button { justify-content: center; width: 32px; height: 30px; border-color: #d6dad4; font-size: 18px; }.icon-button:hover, .tool-button:hover { border-color: #b8c877; color: #596a23; }.page-footer { display: flex; justify-content: space-between; padding: 0 4.2vw 25px; font-size: 9px; }.page-footer b { color: #c4d451; padding: 0 8px; }.page-footer span:nth-child(2) { color: #b1b7b1; text-transform: none; letter-spacing: 0; }.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hover-card { position: absolute; z-index: 5; width: 190px; padding: 14px; pointer-events: none; color: #eaf0df; background: #263530ed; border: 1px solid #71806d; box-shadow: 0 12px 28px #1c282444; transform: translateZ(0); }.hover-card-kicker { margin-bottom: 7px; color: #cbd952; font: 9px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }.hover-card strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.hover-card-part { margin-top: 4px; overflow: hidden; color: #aebbb1; font: 9px 'DM Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }.hover-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 13px 0 0; padding-top: 10px; border-top: 1px solid #52625a; }.hover-card dl div { min-width: 0; }.hover-card dt { color: #91a097; font: 8px 'DM Mono', monospace; text-transform: uppercase; }.hover-card dd { margin: 4px 0 0; color: #f2f5e9; font: 10px 'DM Mono', monospace; }
 @keyframes spin { to { transform: rotate(360deg); } } @media (max-width: 760px) { .topbar { height: 65px; padding: 0 20px; }.topbar-meta { display: none; }.upload-button { margin-left: auto; }.workspace { display: block; min-height: auto; padding: 34px 20px 42px; }.sidebar { max-width: none; padding: 0; }.sidebar h1 { margin-top: 16px; font-size: 48px; }.intro { margin-bottom: 28px; }.section-label { margin-top: 30px; }.sidebar-footer { display: none; }.stage-panel { margin-top: 42px; }.stage-coordinate { display: none; }.canvas-host { min-height: 62vh; }.page-footer { padding: 0 20px 20px; font-size: 8px; }.page-footer span:nth-child(2) { display: none; } }
 </style>
