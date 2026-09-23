@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 const viewer = ref(null)
 const fileInput = ref(null)
 const canvasHost = ref(null)
+const currentPage = ref(window.location.hash === '#viewer' ? 'viewer' : window.location.hash === '#blank' ? 'blank' : 'menu')
 const modelName = ref('Dumbo.glb')
 const modelStatus = ref('Ready to explore')
 const isLoading = ref(true)
@@ -181,8 +182,11 @@ const resize = () => {
   renderer.setSize(clientWidth, clientHeight, false)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 }
+const handleHashChange = () => window.location.reload()
 
 onMounted(async () => {
+  window.addEventListener('hashchange', handleHashChange)
+  if (currentPage.value !== 'viewer') return
   await nextTick()
   const width = canvasHost.value.clientWidth
   const height = canvasHost.value.clientHeight
@@ -231,6 +235,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(frameId)
+  window.removeEventListener('hashchange', handleHashChange)
   resizeObserver?.disconnect()
   document.removeEventListener('fullscreenchange', syncFullscreen)
   if (objectUrl) URL.revokeObjectURL(objectUrl)
@@ -239,7 +244,44 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main ref="viewer" class="app-shell">
+  <main v-if="currentPage === 'menu'" class="menu-shell">
+    <div class="menu-orbit menu-orbit-one"></div>
+    <div class="menu-orbit menu-orbit-two"></div>
+    <header class="menu-header">
+      <a class="brand" href="#menu" aria-label="Object Studio home"><span class="brand-mark"><span></span><span></span><span></span></span><span>OBJECT<span class="brand-muted">/</span>STUDIO</span></a>
+      <span class="menu-kicker">Workspace navigator</span>
+    </header>
+    <section class="menu-content">
+      <div class="menu-intro">
+        <span class="menu-eyebrow">Choose a destination</span>
+        <h1>Where should<br /><em>we go next?</em></h1>
+        <p>Open a focused space for your 3D work.</p>
+      </div>
+      <nav class="destination-grid" aria-label="Main destinations">
+        <a class="destination-card destination-card-primary" href="#viewer">
+          <span class="destination-index">01</span>
+          <span class="destination-icon destination-icon-cube"><i></i></span>
+          <span class="destination-copy"><strong>GLB visualization</strong><small>Inspect and present a 3D asset</small></span>
+          <span class="destination-arrow">↗</span>
+        </a>
+        <a class="destination-card" href="#blank">
+          <span class="destination-index">02</span>
+          <span class="destination-icon destination-icon-empty"><i></i></span>
+          <span class="destination-copy"><strong>New workspace</strong><small>A blank space for what comes next</small></span>
+          <span class="destination-arrow">↗</span>
+        </a>
+      </nav>
+    </section>
+    <footer class="menu-footer"><span>OBJECT STUDIO <b>•</b> 3D ASSET VIEWER</span><span>© 2026</span></footer>
+  </main>
+  <main v-else-if="currentPage === 'blank'" class="blank-shell">
+    <header class="menu-header">
+      <a class="brand" href="#menu" aria-label="Object Studio home"><span class="brand-mark"><span></span><span></span><span></span></span><span>OBJECT<span class="brand-muted">/</span>STUDIO</span></a>
+      <a class="back-link" href="#menu">← Back to destinations</a>
+    </header>
+    <section class="blank-content"><span class="menu-eyebrow">Workspace 02</span><h1>A blank canvas<br /><em>awaits.</em></h1><p>This space is ready for the next experience.</p></section>
+  </main>
+  <main v-else ref="viewer" class="app-shell">
     <header class="topbar">
       <a class="brand" href="/" aria-label="Object Studio home"><span class="brand-mark"><span></span><span></span><span></span></span><span>OBJECT<span class="brand-muted">/</span>STUDIO</span></a>
       <div class="topbar-meta"><span class="live-dot"></span> WebGL renderer online <span class="topbar-divider"></span> v1.0.0</div>
@@ -270,8 +312,10 @@ onBeforeUnmount(() => {
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
 :root { font-family: 'Manrope', sans-serif; color: #1e2725; background: #f5f5f1; font-synthesis: none; } * { box-sizing: border-box; } body { margin: 0; min-width: 320px; } button { font: inherit; }
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; background: #f5f5f1; }.topbar { height: 78px; display: flex; align-items: center; gap: 28px; padding: 0 4.2vw; border-bottom: 1px solid #daddd8; }.brand { display: flex; align-items: center; gap: 11px; color: #202a27; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-decoration: none; }.brand-muted { color: #9da6a1; padding: 0 2px; }.brand-mark { display: flex; align-items: end; gap: 3px; height: 18px; }.brand-mark span { display: block; width: 4px; background: #d2df52; }.brand-mark span:nth-child(1) { height: 9px; }.brand-mark span:nth-child(2) { height: 14px; }.brand-mark span:nth-child(3) { height: 18px; }.topbar-meta { margin-left: auto; color: #89918c; font: 10px 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }.live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #a7c536; box-shadow: 0 0 0 4px #e7eed1; }.topbar-divider { display: inline-block; width: 1px; height: 13px; margin: 0 14px -3px; background: #d2d6d1; }.upload-button { border: 0; padding: 12px 17px; color: #f8faf2; background: #273331; cursor: pointer; font-size: 11px; font-weight: 700; }.plus-icon { margin-right: 8px; color: #d2df52; font-size: 17px; vertical-align: -1px; }
+.menu-shell, .blank-shell { position: relative; min-height: 100vh; overflow: hidden; background: #f1f3ed; }.menu-header { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 86px; padding: 0 6vw; border-bottom: 1px solid #d9ded5; }.menu-kicker, .back-link { color: #849089; font: 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }.back-link { color: #4d5d54; text-decoration: none; }.menu-content { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 13vh 6vw 11vh; }.menu-intro { max-width: 600px; }.menu-eyebrow { color: #9aaa2f; font: 10px 'DM Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }.menu-intro h1, .blank-content h1 { margin: 22px 0 18px; color: #26342f; font-size: clamp(48px, 7vw, 94px); line-height: .94; letter-spacing: -.07em; }.menu-intro h1 em, .blank-content h1 em { color: #9aaa2f; font-style: normal; }.menu-intro p, .blank-content p { color: #78857d; font-size: 14px; line-height: 1.7; }.destination-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 10vh; }.destination-card { position: relative; display: flex; flex-direction: column; min-height: 260px; padding: 26px; color: #34433c; border: 1px solid #d4dbd1; background: #e6eae2; text-decoration: none; transition: transform .25s ease, background .25s ease, border-color .25s ease; }.destination-card:hover { transform: translateY(-6px); border-color: #a6b43d; background: #eef1e9; }.destination-card-primary { color: #eef3e4; border-color: #35443d; background: #35443d; }.destination-card-primary:hover { border-color: #35443d; background: #405148; }.destination-index { color: #94a232; font: 11px 'DM Mono', monospace; }.destination-card-primary .destination-index { color: #d2df52; }.destination-icon { position: absolute; top: 25px; right: 28px; width: 42px; height: 42px; border: 1px solid #aeb8ac; }.destination-icon-cube { transform: rotate(30deg) skewY(-10deg); border-color: #b8c65a; }.destination-icon-cube i { position: absolute; inset: 8px; border: 1px solid #b8c65a; }.destination-icon-empty { border-style: dashed; }.destination-icon-empty i { position: absolute; left: 10px; top: 20px; width: 20px; border-top: 1px solid #95a296; }.destination-copy { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }.destination-copy strong { font-size: 22px; font-weight: 600; letter-spacing: -.04em; }.destination-copy small { color: #7e8b82; font: 11px 'DM Mono', monospace; }.destination-card-primary .destination-copy small { color: #b4c1b5; }.destination-arrow { position: absolute; right: 27px; bottom: 25px; color: #a4b338; font-size: 21px; }.menu-footer { position: absolute; right: 6vw; bottom: 30px; left: 6vw; display: flex; justify-content: space-between; color: #8b978f; font: 9px 'DM Mono', monospace; letter-spacing: .1em; }.menu-footer b { color: #a4b338; }.menu-orbit { position: absolute; border: 1px solid #dce2d6; border-radius: 50%; pointer-events: none; }.menu-orbit-one { top: -28vw; right: -14vw; width: 60vw; height: 60vw; }.menu-orbit-two { bottom: -42vw; left: -21vw; width: 70vw; height: 70vw; border-color: #e1e6dc; }.blank-content { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 18vh 6vw; }.blank-content p { max-width: 340px; }.blank-shell .menu-header { background: #f1f3ed; }
 .workspace { flex: 1; display: grid; grid-template-columns: minmax(260px, 28%) 1fr; min-height: 680px; padding: 4.5vw 4.2vw 3vw; gap: 5vw; }.sidebar { display: flex; flex-direction: column; max-width: 330px; padding: 17px 0 0; }.eyebrow, .section-label, .stage-head, .page-footer { color: #8e9892; font: 10px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }.eyebrow { color: #a7b834; }.sidebar h1 { margin: 21px 0 17px; color: #26322e; font-size: clamp(40px, 4.7vw, 68px); line-height: .98; letter-spacing: -.065em; }.sidebar h1 em { color: #a2af31; font-style: normal; }.intro { max-width: 260px; margin: 0 0 47px; color: #7b8580; font-size: 13px; line-height: 1.8; }.asset-card { display: flex; align-items: center; gap: 12px; padding: 10px; background: #fff; border: 1px solid #e3e5df; box-shadow: 0 7px 24px #313b2412; }.asset-preview { position: relative; display: grid; place-items: center; width: 48px; height: 48px; color: #fff; background: #303d38; font: 9px 'DM Mono', monospace; }.asset-file { padding: 4px 3px; border: 1px solid #89968d; }.asset-corner { position: absolute; top: 4px; right: 5px; color: #cad857; }.asset-info { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }.asset-info strong { overflow: hidden; color: #36413d; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.asset-info span { color: #9ca49f; font: 10px 'DM Mono', monospace; }.status-check { display: grid; place-items: center; width: 20px; height: 20px; color: #99ad2d; border: 1px solid #d8e1a1; border-radius: 50%; font: 11px 'DM Mono', monospace; }.status-check.loading { width: auto; height: auto; padding: 3px; border: 0; color: #9da69f; font-size: 9px; }.section-label { margin: 48px 0 15px; color: #afb6b0; }.details-list { margin: 0; border-top: 1px solid #dfe2dc; }.details-list div { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #dfe2dc; }.details-list dt { color: #8b948e; font-size: 11px; }.details-list dd { margin: 0; color: #4e5c55; font: 10px 'DM Mono', monospace; }.sidebar-footer { display: flex; align-items: center; gap: 12px; margin-top: auto; color: #9da49e; font: 10px 'DM Mono', monospace; line-height: 1.7; }.footer-spark { color: #c3d34e; font-size: 24px; }
 .stage-panel { min-width: 0; display: flex; flex-direction: column; }.stage-head { display: flex; justify-content: space-between; padding: 8px 0 14px; border-bottom: 1px solid #dfe2dc; }.stage-coordinate { color: #aab1ac; }.stage-coordinate b { color: #69756e; font-weight: 400; }.canvas-host { position: relative; flex: 1; min-height: 510px; overflow: hidden; background: #e7e9e4; }.canvas-host canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }.stage-grid { position: absolute; inset: 0; z-index: 0; opacity: .32; background-image: linear-gradient(#c6ccc6 1px, transparent 1px), linear-gradient(90deg, #c6ccc6 1px, transparent 1px); background-size: 60px 60px; mask-image: linear-gradient(to bottom, transparent, #000 40%, transparent); }.canvas-badge { position: absolute; z-index: 2; right: 24px; bottom: 23px; padding: 8px 10px; color: #a2aaa4; border: 1px solid #cbd1cc; background: #e7e9e4cc; font: 9px 'DM Mono', monospace; letter-spacing: .08em; }.canvas-badge span { margin-left: 11px; color: #9caf30; }.axis-widget { position: absolute; z-index: 2; right: 23px; top: 23px; width: 43px; height: 43px; border: 1px solid #c9d0ca; border-radius: 50%; color: #919b95; font: 8px 'DM Mono', monospace; }.axis-widget i { position: absolute; left: 21px; top: 8px; width: 1px; height: 26px; background: #b6c0b9; }.axis-widget span { position: absolute; }.axis-y { top: 3px; left: 19px; color: #b1c33e; }.axis-x { bottom: 8px; left: 31px; }.axis-z { bottom: 8px; left: 8px; }.loading-state, .error-state { position: absolute; z-index: 4; inset: 0; display: grid; place-content: center; justify-items: center; gap: 13px; color: #738078; font: 10px 'DM Mono', monospace; }.loader-ring { width: 30px; height: 30px; border: 2px solid #cad2cc; border-top-color: #aabd35; border-radius: 50%; animation: spin 1s linear infinite; }.error-state { color: #65716b; text-align: center; font-family: 'Manrope', sans-serif; }.error-state button { padding: 9px 12px; border: 1px solid #b5c16a; color: #697722; background: transparent; cursor: pointer; font-size: 11px; }.stage-toolbar { display: flex; justify-content: space-between; padding-top: 13px; }.toolbar-group { display: flex; gap: 5px; }.tool-button, .icon-button { display: flex; align-items: center; gap: 8px; border: 1px solid transparent; color: #8e9992; background: transparent; cursor: pointer; font-size: 10px; }.tool-button { padding: 7px 9px; }.tool-button.active { color: #52631d; border-color: #d6dfa7; background: #f1f5df; }.rotate-icon, .wire-icon { color: #a7b837; font-size: 18px; }.wire-icon { font-size: 16px; }.icon-button { justify-content: center; width: 32px; height: 30px; border-color: #d6dad4; font-size: 18px; }.icon-button:hover, .tool-button:hover { border-color: #b8c877; color: #596a23; }.page-footer { display: flex; justify-content: space-between; padding: 0 4.2vw 25px; font-size: 9px; }.page-footer b { color: #c4d451; padding: 0 8px; }.page-footer span:nth-child(2) { color: #b1b7b1; text-transform: none; letter-spacing: 0; }.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .hover-card { position: absolute; z-index: 5; width: 190px; padding: 14px; pointer-events: none; color: #eaf0df; background: #263530ed; border: 1px solid #71806d; box-shadow: 0 12px 28px #1c282444; transform: translateZ(0); }.hover-card-kicker { margin-bottom: 7px; color: #cbd952; font: 9px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }.hover-card strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.hover-card-part { margin-top: 4px; overflow: hidden; color: #aebbb1; font: 9px 'DM Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }.hover-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 13px 0 0; padding-top: 10px; border-top: 1px solid #52625a; }.hover-card dl div { min-width: 0; }.hover-card dt { color: #91a097; font: 8px 'DM Mono', monospace; text-transform: uppercase; }.hover-card dd { margin: 4px 0 0; color: #f2f5e9; font: 10px 'DM Mono', monospace; }
+@media (max-width: 760px) { .menu-header { height: 70px; padding: 0 20px; }.menu-kicker { display: none; }.menu-content { padding: 15vh 20px 110px; }.menu-intro h1, .blank-content h1 { font-size: 54px; }.destination-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 58px; }.destination-card { min-height: 210px; }.menu-footer { right: 20px; bottom: 22px; left: 20px; font-size: 8px; }.blank-content { padding: 18vh 20px; }.back-link { font-size: 9px; }.menu-orbit-one { top: -25vw; right: -45vw; width: 110vw; height: 110vw; }.menu-orbit-two { bottom: -30vw; left: -55vw; width: 130vw; height: 130vw; } }
 @keyframes spin { to { transform: rotate(360deg); } } @media (max-width: 760px) { .topbar { height: 65px; padding: 0 20px; }.topbar-meta { display: none; }.upload-button { margin-left: auto; }.workspace { display: block; min-height: auto; padding: 34px 20px 42px; }.sidebar { max-width: none; padding: 0; }.sidebar h1 { margin-top: 16px; font-size: 48px; }.intro { margin-bottom: 28px; }.section-label { margin-top: 30px; }.sidebar-footer { display: none; }.stage-panel { margin-top: 42px; }.stage-coordinate { display: none; }.canvas-host { min-height: 62vh; }.page-footer { padding: 0 20px 20px; font-size: 8px; }.page-footer span:nth-child(2) { display: none; } }
 </style>
